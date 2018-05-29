@@ -1,6 +1,8 @@
 ---
 title: Emoji Test
 tags:
+  - testwfq
+  - "2015"
 ---
 
 This is an emoji test. :smile: lol.
