@@ -10,7 +10,7 @@
   {% assign num_array = '0' | split: '' %}
 
   {% assign first = true %}
-  {% for i in (1..100) %}
+  {% for i in (1..10000) %}
     {% if str_stack.size == 0 %}
       {% break %}
     {% endif %}
