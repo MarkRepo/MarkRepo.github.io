@@ -2,9 +2,19 @@
 {% if site.paginate > 0 %}{% assign posts = paginator.posts %}{% endif %}
 
 <section id="posts" class="posts-expand">
+{% comment %}
   {% for post in posts %}
     {% assign is_index = true %}
     {% include _macro/post.html %}
+  {% endfor %}
+{% endcomment %}
+
+  {% for post in posts %}
+
+    <li>
+    <a href="{{ post.url }}"><span class="title-date" style="color: #bbb">{{ forloop.index0 }}-{{ post.date | date: '%Y/%m/%d' }}</span>-{{ post.title }}</a>
+    </li>
+
   {% endfor %}
 </section>
 
