@@ -1,5 +1,5 @@
 ---
-title: 目标文件里有什么
+title: 程序员的自我修养(链接、装载与库) --- 目标文件里有什么
 descriptions: 
 categories: kernel
 tags: ELF
