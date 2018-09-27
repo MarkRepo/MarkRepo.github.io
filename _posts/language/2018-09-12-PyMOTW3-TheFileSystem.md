@@ -1,6 +1,6 @@
 ---
 title: PyMOTW-3 --- The File System
-categories: languages
+categories: language
 tags: PyMOTW-3
 ---
 
