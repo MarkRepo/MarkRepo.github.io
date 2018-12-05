@@ -10,6 +10,8 @@ tags:
   - qsve
 --- 
 
+[github项目地址](github: https://github.com/MarkRepo/qsve)
+
 ## Intel Quick Sync Video Encoder
 
 记录Intel E3 1275处理器集成显卡的硬编码预研过程。  
@@ -51,8 +53,6 @@ tags:
 2. so链接的静态库不是`libmfx.a`， 而是`libdispatch_shared.a`, 这个静态库需要自己在`/opt/intel/mediasdk/opensource/mfx_dispatch`目录下用cmake编译出来，具体过程看dispatch的相关文档。如果使用libmfx.a链接，so会产生符号冲突，导致崩溃。
 
 ### 性能质量相关的关键参数设置
-
-[github项目地址](github: https://github.com/MarkRepo/qsve)
 
 VPP处理过程伪代码：
 
