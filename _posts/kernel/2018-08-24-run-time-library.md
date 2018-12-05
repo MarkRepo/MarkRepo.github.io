@@ -1,5 +1,5 @@
 ---
-title: 程序员的自我修养(链接、装载与库) --- 运行库
+title: 链接、装载与库 --- 运行库
 categories: kernel
 tags: library
 ---

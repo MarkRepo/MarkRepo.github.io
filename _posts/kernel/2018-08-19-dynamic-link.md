@@ -1,5 +1,5 @@
 ---
-title: 程序员的自我修养(链接、装载与库) --- 动态链接
+title: 链接、装载与库 --- 动态链接
 description: 描述动态链接的过程
 categories: kernel
 tags: dynamic-link

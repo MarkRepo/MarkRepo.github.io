@@ -1,5 +1,5 @@
 ---
-title: 程序员的自我修养(链接、装载与库) --- 静态链接
+title: 链接、装载与库 --- 静态链接
 descriptions: 描述静态链接的过程
 categories: kernel
 tags: link

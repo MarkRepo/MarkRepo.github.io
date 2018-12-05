@@ -1,5 +1,5 @@
 ---
-title: 程序员的自我修养(链接、装载与库) --- 可执行文件的装载
+title: 链接、装载与库 --- 可执行文件的装载
 categories: kernel
 tags: 
   - load
