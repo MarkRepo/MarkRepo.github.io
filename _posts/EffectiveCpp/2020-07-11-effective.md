@@ -1,7 +1,7 @@
 ---
 title: effective C++
 descriptions: note
-categories: design
+categories: language
 tags: design
 ---
 
