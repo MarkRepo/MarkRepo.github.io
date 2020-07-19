@@ -1,6 +1,6 @@
 ---
-title: effective C++
-descriptions: note
+title: effectivecpp
+descriptions: effective cpp note
 categories: language
 tags: design
 ---
@@ -2024,13 +2024,491 @@ Fundamentally, the issue is whether compilers will diagnose invalid references t
 
 ## 44.Factor parameter-independent code out of templates.
 
+template avoid code replication:
+
+```cpp
+template<typename T, std::size_t n>
+class SquareMatrix { 
+public:
+	void invert();
+};
+```
+
+```cpp
+template<typename T> class SquareMatrixBase { 
+protected:
+	void invert(std::size_t matrixSize);
+};
+
+template<typename T, std::size_t n>
+class SquareMatrix: private SquareMatrixBase<T> { 
+private:
+	using SquareMatrixBase<T>::invert;
+public:
+	void invert() { invert(n); }
+};
+```
+
+The additional cost of calling it should be zero, because derived classes’ inverts call the base class version using inline functions. (The inline is implicit — see Item 30.)
+
+base invert function need know data memory:
+
+```cpp
+template<typename T> 
+class SquareMatrixBase { 
+protected:
+	SquareMatrixBase(std::size_t n, T *pMem) : size(n), pData(pMem) {}
+	void setDataPtr(T *ptr) { pData = ptr; }
+private: 
+  std::size_t size;
+	T *pData;
+};
+
+template<typename T, std::size_t n>
+class SquareMatrix: private SquareMatrixBase<T> { 
+public:
+	SquareMatrix() : SquareMatrixBase<T>(n, data) {}
+private:
+	T data[n*n];
+};
+
+// data may be too large, so allocate on memory 
+template<typename T, std::size_t n>
+class SquareMatrix: private SquareMatrixBase<T> { 
+public:
+	SquareMatrix( ) : SquareMatrixBase<T>(n,0), pData(new T[n*n]){ 
+    this->setDataPtr(pData.get()); 
+  }
+private:
+	boost::scoped_array<T> pData;
+};
+```
+
+ now many --maybe-- all  of SquareMatrix’s member functions can be simple inline calls to (non-inline) base class versions that are shared with all other matrices holding the same type of data, regardless of their size. At the same time, SquareMatrix objects of different sizes are distinct types.
+
+Think adout it :
+
+1. The versions of invert with the matrix sizes hardwired(硬编码) into them are likely to generate better code than the shared version where the size is passed as a function parameter or is stored in the object.	
+2. On the other hand, having only one version of invert for multiple matrix sizes decreases the size of the executable, and that could reduce the program’s working set size and improve locality of refer- ence in the instruction cache. Those things could make the program run faster, more than compensating for any lost optimizations in size- specific versions of invert
+3. Another efficiency consideration concerns the sizes of objects.moving size-independent versions of functions up into a base class can increase the overall size of each object.It can also lead to resource management complications.
+4. This Item has discussed only bloat due to non-type template parame- ters, but type parameters can lead to bloat,
+   * int and long have the same binary representation, so the member functions for, say, vector<int> and vector<long> would likely be identical — the very definition of bloat
+   * Similarly, on most platforms, all pointer types have the same binary representation, so templates holding pointer types (e.g., list<int*>, list<const int*>, list<SquareMatrix<long, 3>*>, etc.) should often be able to use a single underlying implementation for each member function
+
+Things to Remember
+
+- ✦  Templates generate multiple classes and multiple functions, so any template code not dependent on a template parameter causes bloat(膨胀).
+- ✦  Bloat due to non-type template parameters can often be eliminated by replacing template parameters with function parameters or class data members.
+- ✦  Bloat due to type parameters can be reduced by sharing implemen- tations for instantiation types with identical binary representations.
+
 ## 45.Use member function templates to accept “all compatible types.”
+
+One of the things that real pointers do well is support implicit conver- sions. Derived class pointers implicitly convert into base class point- ers, pointers to non-const objects convert into pointers to const objects.
+
+```cpp
+class Top { ... };
+class Middle: public Top { ... }; 
+class Bottom: public Middle { ... }; 
+Top *pt1 = new Middle;
+Top *pt2 = new Bottom;
+const Top *pct2 = pt1;
+
+//To get the conversions among SmartPtr classes that we want, we have to program them explicitly.
+template<typename T> 
+class SmartPtr {
+public:
+	explicit SmartPtr(T *realPtr);
+};
+SmartPtr<Top> pt1 = SmartPtr<Middle>(new Middle);// convert SmartPtr<Middle> ⇒ // SmartPtr<Top>
+SmartPtr<Top> pt2 = SmartPtr<Bottom>(new Bottom);// convert SmartPtr<Bottom> ⇒ // SmartPtr<Top>
+SmartPtr<const Top> pct2 = pt1;// convert SmartPtr<Top> ⇒ // SmartPtr<const Top>
+```
+
+*member function templates* templates  -- that generate member functions of a class:
+
+```cpp
+template<typename T> 
+class SmartPtr {
+public:
+	template<typename U> 
+  SmartPtr(const SmartPtr<U>& other);
+};
+```
+
+The generalized copy constructor above is not declared explicit. That’s deliberate.
+
+to restrict the conversions:
+
+```cpp
+template<typename T> 
+class SmartPtr {
+public:
+	template<typename U> 
+  SmartPtr(const SmartPtr<U>& other) : heldPtr(other.get()) { ... }
+	T* get() const { 
+    return heldPtr; 
+  }
+private:
+	T *heldPtr;
+};
+```
+
+We use the member initialization list to initialize SmartPtr\<T\>’s data member of type T* with the pointer of type U* held by the SmartPtr\<U\>. This will compile only if there is an implicit conversion from a U* pointer to a T* pointer, and that’s precisely what we want.
+
+The utility of member function templates isn’t limited to constructors. Another common role for them is in support for assignment.
+
+```cpp
+template<class T> 
+class shared_ptr { 
+public:
+	template<class Y>
+	explicit shared_ptr(Y * p);
+  
+	template<class Y> 
+  shared_ptr(shared_ptr<Y> const& r);
+  
+	template<class Y>
+	explicit shared_ptr(weak_ptr<Y> const& r);
+  
+	template<class Y>
+	explicit shared_ptr(auto_ptr<Y>& r);
+  
+	template<class Y>
+	shared_ptr& operator=(shared_ptr<Y> const& r);
+  
+	template<class Y>
+	shared_ptr& operator=(auto_ptr<Y>& r);
+};
+```
+
+how the auto_ptrs passed to tr1::shared_ptr constructors and assignment operators aren’t declared const, in contrast to how the tr1::shared_ptrs and tr1::weak_ptrs are passed. That’s a consequence of the fact that auto_ptrs stand alone in being modified when they’re copied
+
+Member function templates are wonderful things, but they don’t alter the basic rules of the language. Item 5 explains that two of the four member functions that compilers may generate are the copy construc- tor and the copy assignment operator. tr1::shared_ptr declares a generalized copy constructor, and it’s clear that when the types T and Y are the same, the generalized copy constructor could be instantiated to create the “normal” copy constructor. So will compilers generate a copy constructor for tr1::shared_ptr, or will they instantiate the genera ized copy constructor template when one tr1::shared_ptr object is constructed from another tr1::shared_ptr object of the same type?
+
+As I said, member templates don’t change the rules of the language, and the rules state that if a copy constructor is needed and you don’t declare one, one will be generated for you automatically. Declaring a generalized copy constructor (a member template) in a class doesn’t keep compilers from generating their own copy constructor (a non- template), so if you want to control all aspects of copy construction, you must declare both a generalized copy constructor as well as the “normal” copy constructor. The same applies to assignment. Here’s an excerpt from tr1::shared_ptr’s definition that exemplifies this:
+
+```cpp
+template<class T> 
+class shared_ptr { 
+public:
+	shared_ptr(shared_ptr const& r);
+	template<class Y> 
+  shared_ptr(shared_ptr<Y> const& r);
+  
+	shared_ptr& operator=(shared_ptr const& r);  
+	template<class Y>
+	shared_ptr& operator=(shared_ptr<Y> const& r);
+};
+```
+
+Things to Remember
+
+✦  Use member function templates to generate functions that accept all compatible types.
+
+✦  If you declare member templates for generalized copy construction or generalized assignment, you’ll still need to declare the normal copy constructor and copy assignment operator, too.
 
 ## 46.Define non-member functions inside templates when type conversions are desired.
 
+```cpp
+template<typename T>
+class Rational { 
+public:
+	Rational(const T& numerator = 0, const T& denominator = 1);
+	const T numerator() const; 
+  const T denominator() const;
+};
+
+template<typename T>
+const Rational<T> operator*(const Rational<T>& lhs, const Rational<T>& rhs){...}
+
+//we want to support mixed-mode arithmetic
+Rational<int> oneHalf(1, 2); 				// this example is from Item 24, except Rational is now a template
+Rational<int> result = oneHalf * 2; // error! won’t compile
+```
+
+In Item 24, compilers know what function we’re trying to call (operator* taking two Rationals), but here, compilers do *not* know which function we want to call. Instead, they’retrying to *figure out* what function to instantiate from the template named operator\*. They know that they’re supposed to instantiate some function named operator\* taking two parameters of type Rational\<T\>, but in order to do the instantiation, they have to figure out what T is. The problem is, they can’t.
+
+In attempting to deduce T, they look at the types of the arguments being passed in the call to operator\*. In this case, those types are Rational\<int\> (the type of oneHalf) and int (the type of 2). **Each parameter is considered separately.**
+
+The deduction using oneHalf is easy. operator\*’s first parameter is declared to be of type Rational\<T\>, and the first argument passed to operator\* (oneHalf) is of type Rational\<int\>, so T must be int. Unfortunately, the deduction for the other parameter is not so simple. operator\*’s second parameter is declared to be of type Rational\<T\>, but the second argument passed to operator\* (2) is of type int. How are compilers to figure out what T is in this case? You might expect them to use Rational\<int\>’s nonexplicit constructor to convert 2 into a Rational\<int\>, thus allowing them to deduce that T is int, but they don’t do that. They don’t, **because implicit type conversion functions are *never* considered during template argument deduction. Never. Such conversions are used during function calls, yes, but before you can call a function, you have to know which functions exist. In order to know that, you have to deduce parameter types for the relevant function templates** (so that you can instantiate the appropriate functions). But implicit type conversion via constructor calls is not considered during template argument deduction. Item 24 involves no templates, so template argument deduction is not an issue. Now that we’re in the template part of C++ (see Item 1), it’s the primary issue.
+
+We can relieve(缓解) compilers of the challenge of template argument deduction by **taking advantage of the fact that a friend declaration in a template class can refer to a specific function.** That means the class Rational\<T\> can declare operator\* for Rational\<T\> as a friend function. **Class templates don’t depend on template argument deduction (that process applies only to function templates), so T is always known at the time the class Rational\<T\> is instantiated.** That makes it easy for the Rational\<T\> class to declare the appropriate operator\* function as a friend:
+
+```cpp
+template<typename T> class Rational {
+public:
+	friend const Rational operator*(const Rational& lhs, const Rational& rhs);
+};
+
+template<typename T> 
+constRational<T> operator*(constRational<T>&lhs, const Rational<T>& rhs){...}
+```
+
+Now our mixed-mode calls to operator\* will compile, because when the object oneHalf is declared to be of type Rational\<int\>, the class Rational\<int\> is instantiated, and as part of that process, the friend function operator\* that takes Rational\<int\> parameters is automatically declared. As a declared *function* (not a function *template*), compilers can use implicit conversion functions (such as Rational’s non-explicit constructor) when calling it, and that’s how they make the mixed- mode call succeed
+
+Inside a class template, the name of the template can be used as shorthand for the template and its parameters, so inside Rational<T>, we can just write Rational instead of Rational<T>
+
+above code has link problem, because Our intent is to have the operator* template outside the class provide that definition, but things don’t work that way. If we declare a function ourselves (which is what we’re doing inside the Rational template), we’re also responsible for defining that function. In this case, we never provide a definition, and that’s why linkers can’t find one.
+
+```cpp
+template<typename T> 
+class Rational {
+public:
+	friend const Rational operator*(const Rational& lhs, 
+                                  const Rational& rhs){
+		return Rational(lhs.numerator() * rhs.numerator(), 
+                    lhs.denominator() * rhs.denominator());
+  }
+};
+```
+
+In order to make type conversions possible on all arguments, we need a non-member function (Item 24 still applies); and in order to have the proper function automatically instantiated, we need to declare the function inside the class. The only way to declare a non- member function inside a class is to make it a friend.
+
+As Item 30 explains, functions defined inside a class are implicitly declared inline, and that includes friend functions like operator\*. You can minimize the impact of such inline declarations by having operator\* do nothing but call a helper function defined outside of the class
+
+```cpp
+template<typename T> class Rational;
+
+template<typename T>
+const Rational<T> doMultiply(const Rational<T>& lhs, 
+                             const Rational<T>& rhs) {
+	return Rational<T>(lhs.numerator() * rhs.numerator(),
+                     lhs.denominator() * rhs.denominator());
+}
+
+template<typename T> 
+class Rational {
+public:
+friend
+	const Rational<T> operator*(const Rational<T>& lhs,
+                              const Rational<T>& rhs) { 
+  	return doMultiply(lhs, rhs); 
+	}
+};
+```
+
+Things to Remember
+
+✦ When writing a class template that offers functions related to the template that support implicit type conversions on all parameters, define those functions as friends inside the class template.
+
 ## 47.Use traits classes for information about types.
 
+```cpp
+template<typename IterT, typename DistT> // move iter d units forward; if d < 0, move iter backward
+void advance(IterT& iter, DistT d);
+
+struct input_iterator_tag {};
+struct output_iterator_tag {};
+struct forward_iterator_tag: public input_iterator_tag {};
+struct bidirectional_iterator_tag: public forward_iterator_tag {};
+struct random_access_iterator_tag: public bidirectional_iterator_tag {};
+
+template<typename IterT, typename DistT> 
+void advance(IterT& iter, DistT d) {
+	if (iter is a random access iterator) { 
+    iter += d;
+	} else {
+		if (d >= 0) { 
+      while (d--)  ++iter; 
+    } else { 
+      while (d++) --iter; 
+    }
+	}
+}
+```
+
+In other words, we need to get some information about a type. That’s what *traits* let you do: they allow you to get information about a type during compilation.
+
+Traits are a technique and a convention followed by C++ programmers. One of the demands made on the technique is that it has to work as well for built-in types as it does for user-defined types, So the traits information for a type must be external to the type.The standard technique is to put it into a template and one or more specializations of that template.For iterators, the template in the standard library is named iterator_traits:
+
+```cpp
+template<typename IterT> // template for information about 
+struct iterator_traits; // iterator types
+```
+
+The way iterator_traits works is that for each type IterT, a typedef named iterator_category is declared in the struct iterator_traits\<IterT\>. This typedef identifies the iterator category of IterT.
+
+iterator_traits implements this in two parts. First, it imposes the requirement that any user-defined iterator type must contain a nested typedef named iterator_category that identifies the appropriate tag struct.
+
+```cpp
+template < ... > // template params elided 
+class deque {
+public:
+	class iterator { 
+  public:
+		typedef random_access_iterator_tag iterator_category;
+	};
+};
+```
+
+```cpp
+template < ... > 
+class list { 
+public:
+	class iterator { 
+  public:
+		typedef bidirectional_iterator_tag iterator_category;
+	};
+};
+```
+
+iterator_traits just parrots back the iterator class’s nested typedef:
+
+```cpp
+// the iterator_category for type IterT is whatever IterT says it is; 
+// see Item 42 for info on the use of “typedef typename” 
+template<typename IterT>
+struct iterator_traits {
+	typedef typename IterT::iterator_category iterator_category;
+}	
+```
+
+ it doesn’t work at all for iterators that are pointers, because there’s no such thing as a pointer with a nested typedef. ,so iterator_traits offers a *partial template specialization* for pointer types. Pointers act as random access iterators, so that’s the category iterator_traits specifies for them:
+
+```cpp
+template<typename T> // partial template specialization 
+struct iterator_traits<T*> {// for built-in pointer types
+	typedef random_access_iterator_tag iterator_category;
+};
+```
+
+At this point, you know how to design and implement a traits class:
+
+- Identify some information about types you’d like to make available (e.g., for iterators, their iterator category).
+
+- Choose a name to identify that information (e.g., iterator_category).
+
+- Provide a template and set of specializations (e.g., iterator_traits)
+
+  that contain the information for the types you want to support.
+
+we can refine our pseudocode for advance:
+
+```cpp
+template<typename IterT, typename DistT> 
+void advance(IterT& iter, DistT d){
+	if (typeid(typename std::iterator_traits<IterT>::iterator_category) == 				
+      typeid(std::random_access_iterator_tag)){
+			...    
+  }
+}
+```
+
+IterT’s type is known during compilation, so iterator_traits\<IterT\>::iterator_category can also be determined during compilation. Yet the if statement is evaluated at runtime. Why do something at runtime that we can do during compilation? It wastes time (literally), and it bloats our executable.
+
+What we really want is a conditional construct (i.e., an if...else statement) for types that is evaluated during compilation. As it happens, C++ already has a way to get that behavior. It’s called overloading.
+
+```cpp
+template<typename IterT, typename DistT> 
+void doAdvance(IterT& iter, DistT d,std::random_access_iterator_tag) {
+	iter += d;
+}
+
+template<typename IterT, typename DistT> 
+void doAdvance(IterT& iter, DistT d, std::bidirectional_iterator_tag) {
+	if (d >= 0) { 
+    while (d--) ++iter; 
+  } else { 
+    while (d++) --iter; 
+  }
+}
+
+template<typename IterT, typename DistT> 
+void doAdvance(IterT& iter, DistT d, std::input_iterator_tag) {
+	if(d<0){
+    throw std::out_of_range("Negative distance");
+  }
+  while (d--) ++iter;
+}
+
+template<typename IterT, typename DistT> 
+void advance(IterT& iter, DistT d) {
+	doAdvance( iter, d, typename std::iterator_traits<IterT>::iterator_category() ); 
+}
+```
+
+We can now summarize how to use a traits class:
+
+- Create a set of overloaded “worker” functions or function templates (e.g., doAdvance) that differ in a traits parameter. Implement each function in accord with the traits information passed.
+- Create a “master” function or function template (e.g., advance) that calls the workers, passing information provided by a traits class.
+
+Things to Remember
+
+1. ✦  Traits classes make information about types available during compilation. They’re implemented using templates and template specializations.
+
+2. ✦  In conjunction with overloading, traits classes make it possible to perform compile-time if...else tests on types.
+
 ## 48.Be aware of template metaprogramming.
+
+TMP(template metaprogramming) has two great strengths.
+
+ First, it makes some things easy that would otherwise be hard or impossible. 
+
+Second, because template metaprograms execute during C++ compilation, they can shift work from runtime to compile-time. 
+
+```cpp
+template<typename IterT, typename DistT> 
+void advance(IterT& iter, DistT d){
+	if (typeid(typename std::iterator_traits<IterT>::iterator_category) == 				
+      typeid(std::random_access_iterator_tag)){
+			iter += d;
+  }else {
+    if (d >= 0) { 
+      while (d--) ++iter; 
+    } else { 
+      while (d++) --iter; 
+    }
+  }
+}
+
+std::list<int>::iterator iter;
+advance(iter, 10);
+```
+
+Consider the version of advance that will be generated for the above call. After substituting iter’s and 10’s types for the template parameters IterT and DistT, we get this:
+
+```cpp
+void advance(std::list<int>::iterator& iter, int d) {
+  if (typeid(std::iterator_traits<std::list<int>::iterator>::iterator_category) == 				
+      typeid(std::random_access_iterator_tag)) {
+      iter += d;
+  } else {
+    if (d >= 0) { 
+      while (d--) ++iter; 
+    } else { 
+      while (d++) --iter; 
+    } 
+  }
+}
+```
+
+The problem is the highlighted line, the one using +=. In this case, we’re trying to use += on a list<int>::iterator, but list<int>::iterator is a bidirectional iterator (see Item 47), so it doesn’t support +=.  we know we’ll never try to execute the += line, because the typeid test will always fail for list<int>::iterators, but compilers are obliged to make sure that all source code is valid, even if it’s not executed, and “iter += d” isn’t valid when iter isn’t a random access iterator.
+
+TMP has been shown to be Turing-complete, which means that it is powerful enough to compute anything. Using TMP, you can declare variables, perform loops, write and call functions, etc. But such constructs look very different from their “normal” C++ counterparts. For example if...else conditionals in TMP are expressed via templates and template specializations. TMP loops don’t involve recursive function calls, they involve recursive *template instantiations*.
+
+```cpp
+template<unsigned n> 
+struct Factorial {
+  enum { value = n * Factorial<n-1>::value };
+};
+template<> 
+struct Factorial<0> {
+	enum{value=1}; 
+};
+
+int main(){
+	std::cout << Factorial<5>::value; 
+  std::cout << Factorial<10>::value;  
+}
+```
+
+uses the enum hack (see Item 2) to declare a TMP variable named value
+
+Things to Remember
+
+✦  Template metaprogramming can shift work from runtime to compile-time, thus enabling earlier error detection and higher runtime performance.
+
+✦  TMP can be used to generate custom code based on combinations of policy choices, and it can also be used to avoid generating code inappropriate for particular types.
 
 ## 49.Understand the behavior of the new-handler.
 
