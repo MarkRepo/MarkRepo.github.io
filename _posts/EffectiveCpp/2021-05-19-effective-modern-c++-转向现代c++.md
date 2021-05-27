@@ -124,7 +124,7 @@ TEST(DeclTypeTest, autoTest) {
 
   Widget4 w41{};   // default constructor
   Widget4 w42({}); // initializer_list constructor
-  Widget4 w43{{}}; // initializer_list constructor
+  Widget4 w43{ {} }; // initializer_list constructor
 }
 ```
 
