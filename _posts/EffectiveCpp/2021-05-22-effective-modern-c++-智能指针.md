@@ -2,7 +2,7 @@
 title: effective modern c++ 之 智能指针
 descriptions: 高效使用 c++11 特性
 categories: language
-tags: c++11
+tags: c++11, shared_ptr
 ---
 
 # 四、智能指针
