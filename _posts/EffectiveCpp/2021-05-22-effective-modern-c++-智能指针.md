@@ -121,6 +121,47 @@ tags: c++11, shared_ptr, unique_ptr
 
 ## 条款20 对于类似 std::shared_ptr 但有可能空悬的指针使用 std::weak_ptr
 
+1. weak_ptr 不参与引用计数，即不共享对象的所有权，因此它需要判断所指对象是否已经析构，即空悬。
+
+2. weak_ptr 不是一种独立的智能指针，他是shared_ptr 的一种扩充，一般是通过 shared_ptr 来创建。它本身不能提领，也不能检查是否为空。
+
+   ```cpp
+   auto spw = std::make_shared<Widget>();
+   std::weak_ptr<Widget> wpw(spw);
+   if (wpw.expire()) // 通过expire来判断是否失效
+   ```
+
+3. **校验weak_ptr是否失效，以及在未失效时提供对所指对象的访问**, 这需要是一个原子操作，否则会带来竞险。这个原子操作可以通过由 weak_ptr 来创建shared_ptr 实现。有两种形式，选择哪种取决于在失效时期望得到什么结果：
+
+   1. 使用 std::weak_ptr::lock, 返回一个shared_ptr，如果已经失效，**shared_ptr 为空**
+   2. 使用weak_ptr 作为实参来构造shared_ptr, 如果已经失效，**抛出异常**
+
+   ```cpp
+   std::shared_ptr<Widget> spw1 = wpw.lock(); // 方式1，可用auto简化
+   std::shared_ptr spw2(wpw); // 方式2
+   ```
+
+4. weak_ptr的用武之地包括缓存、观察者列表，以及避免shared_ptr 指针环路
+
+   1. 缓存一些计算成本高的结果对象，并在对象不再使用时将其删除，避免缓存拥塞。缓存管理器持有weak_ptr
+
+   ```cpp
+   // 不带缓存的 工厂函数， loadWidget是个耗时操作
+   std::unique_ptr<const Widget> loadWidget(WidgetID id);
+   // 带缓存的工厂函数，由用户决定对象的生存期
+   std::shared_ptr<const Widget> fastLoadWidget(Widget id) {
+     static std::unordered_map<WidgetID, std::weak_ptr<const Widget>> cache;
+     auto objPtr = cache[id].lock();
+     if (!objPtr) {
+       objPtr = loadWidget(id);
+       cache[id] = objPtr;
+     }
+     return objPtr;
+   }
+   ```
+
+   2. 在观察者模式中，每个主题包含一个容器持有其观察者的weak_ptr ，因为主题不控制观察者的生存期
+
 ## 条款21
 
 ## 条款22
