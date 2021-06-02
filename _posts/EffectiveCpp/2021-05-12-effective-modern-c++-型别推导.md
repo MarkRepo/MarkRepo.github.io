@@ -35,7 +35,7 @@ tags: c++11
 
 # 一、型别推导
 
-c++ 98 只支持一套型别推导规则，用于函数模板。c++11对这套规则进行了一些改动，并增加了2套规则：一套用于auto，一套用于decltype。c++14 扩展了能够运用auto和decltype的语境。
+c++98 只支持一套型别推导规则，用于函数模板。c++11对这套规则进行了一些改动，并增加了2套规则：一套用于auto，一套用于decltype。c++14 扩展了能够运用auto和decltype的语境。
 
 ## 条款1： 理解模板型别推导
 
@@ -638,7 +638,7 @@ TEST(DeclTypeTest, autoTest) {
   //authAndAccessCpp14Error(d, 5) = 10; // error: expression is not assignable, 
                                         // 无法通过编译，因为函数返回的是一个右值
   authAndAccessCpp14Correct(d, 1) = 15;
-  authAndAccessCpp11Final(d, 2) = 11; // 接收左值
+  authAndAccessCpp11Final(d, 2) = 11; // 接收左值d
   authAndAccessCpp14Final(d, 5) = 12;
   // 接收右值, makeIntDeque产生的临时deque<int>对象会在整个赋值语句结束后析构，
   // 所以这里相当于创建了一个临时deque对象中某个元素的副本

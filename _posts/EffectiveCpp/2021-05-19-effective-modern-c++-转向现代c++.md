@@ -25,7 +25,7 @@ using namespace std;
 // 会强烈的（只要有可能就会）优先选用带有std::initializer_list型别形参的重载版本
 class Widget{
 public:
-  //2. 即使是平常会执行复制或移动的构造函数也可能被带有initializer_list型别形参的构造函数劫持(clang 12.0 不成立)
+  //2. 即使是平常会执行复制或移动的构造函数也可能被带有initializer_list型别形参的构造函数劫持(MacOS clang 12.0 不成立)
   Widget(const Widget& w){
     cout << "Widget copy constructor was called" << endl;
   }
@@ -100,18 +100,18 @@ class Widget4 {
 Widget w2();
 
 TEST(DeclTypeTest, autoTest) {
-  Widget w1(10, true);
-  Widget w2{10, true}; // 10 和 true 被强制转换为 long double
-  Widget w3(10, 5.0);
-  Widget w4{10, 5.0}; // 10, 5.0 被强制转换为long double
+  Widget w1(10, true); // Widget(int, bool) called
+  Widget w2{10, true}; // Widget(initializer_list) called (10 和 true 被强制转换为 long double)
+  Widget w3(10, 5.0);  // Widget(int, double) called
+  Widget w4{10, 5.0};  // Widget(initializer_list) called (10, 5.0 被强制转换为long double)
 
   //即使是平常会执行复制或移动的构造函数也可能被带有initializer_list型别形参的构造函数劫持(clang 12.0 不成立)
-  Widget w5(w4);
+  Widget w5(w4);             // Widget copy constructor was called
   // w4 先被强制转换成float，随后又被强制转换为long double（不成立，这里还是会调用copy constructor）
-  Widget w6{w4}; 
-  Widget w7(std::move(w4)); 
+  Widget w6{w4};             // Widget copy constructor was called
+  Widget w7(std::move(w4));  // Widget copy constructor was called
   // w4 先被强制转换成float，随后又被强制转换为long double（不成立，这里还是会调用copy constructor）
-  Widget w8{std::move(w5)}; 
+  Widget w8{std::move(w5)};  // Widget copy constructor was called
 
   // error: constant expression evaluates to 10 which cannot be narrowed to type 'bool'
   // error: type 'double' cannot be narrowed to 'bool' in initializer list
@@ -119,34 +119,13 @@ TEST(DeclTypeTest, autoTest) {
   // 错误，要求窄化转换
 
   // 这里不会使用initalizer_list版本
-  Widget3 w31{10, true};
-  Widget3 w32{10, 5.0};
+  Widget3 w31{10, true}; // Widget3(int, bool) was called
+  Widget3 w32{10, 5.0};  // Widget3(int, double) was called
 
-  Widget4 w41{};   // default constructor
-  Widget4 w42({}); // initializer_list constructor
-  Widget4 w43{ {} }; // initializer_list constructor
+  Widget4 w41{};     // Widget4 defalut constructor was called
+  Widget4 w42({});   // Widget4 initializer_list was called
+  Widget4 w43{ {} }; // Widget4 initializer_list was called
 }
-```
-
-结果：
-
-```shell
-Widget(int, bool) called
-Widget(initializer_list) called
-Widget(int, double) called
-Widget(initializer_list) called
-
-Widget copy constructor was called
-Widget copy constructor was called
-Widget copy constructor was called
-Widget copy constructor was called
-
-Widget3(int, bool) was called
-Widget3(int, double) was called
-
-Widget4 defalut constructor was called
-Widget4 initializer_list was called
-Widget4 initializer_list was called
 ```
 
 结论：
@@ -244,7 +223,7 @@ TEST(TypeIndex, nullptr) {
 ## 条款9 优先使用别名声明，而非 typedef
 
 1. 别名声明可以模板化，称为别名模板，typedef不支持
-2. 别名模板可以让人免写 “::type” 后缀，并且在模板内部，对于内嵌的typede的引用经常要加上typename前缀
+2. 别名模板可以让人免写 “::type” 后缀。并且在模板内部，对于内嵌的typede的引用经常要加上typename前缀
 
 参考如下示例代码来看别名声明和typedef的使用差异
 
@@ -347,8 +326,7 @@ enum class UserInfoFields {uiName, uiEmail, uiReputation};
 UserInfo uInfo;
 auto val = std::get<static_cast<std::size_t>(UserInfoFields::uiEmail)>(uInfo);
 
-// 上面的写法太过繁琐，使用函数来获取枚举量代表的值
-// 写个函数，取用任意枚举型别的枚举量并以编译期常量形式返回其值
+// 写个函数，取用任意枚举型别的枚举量并以编译期常量形式返回其值，来简化上述用法
 template<typename E>
 constexpr typename std::underlying_type<E>::type // constexpr 可以在编译期计算出值
 toUType(E enumerator) noexcept { // noexcept 表示不会抛出异常
@@ -367,7 +345,7 @@ auto val = std::get<toUType(UserInfoFields::uiEmail)>(uInfo);
 
 建议使用第二种，虽然要付出点代价，但可以得到限定枚举型别的好处。
 
-## 条款11 优先使用删除函数，而非private未定义函数
+## 条款11 优先使用删除函数（delete），而非private未定义函数
 
 1. 优先使用删除函数，而非private未定义函数
 2. 任何函数都可以删除，包括非成员函数和模板具现
@@ -383,7 +361,7 @@ private:
 };
 ```
 
-声明成private，禁止普通用户去调用他们；不定义，是防止特殊用户调用，比如成员函数，类的友元；后一种情况直到链接阶段报未定义错误，而delete都在编译阶段报错。c++11的做法：
+声明成private，是禁止普通用户去调用他们；而不定义，是防止**特殊用户**调用，比如成员函数，类的友元；后一种情况直到链接阶段报未定义错误，而delete都在编译阶段报错。c++11的做法：
 
 ```cpp
 template <class charT, class traits = char_traits<charT> >
@@ -453,7 +431,7 @@ private:
 };
 
 template<>
-void processPointer<void>(void*) = delete; // 正确的写法
+void Widget::processPointer<void>(void*) = delete; // 正确的写法
 ```
 
 ## 条款12 为意在改写的函数，添加override声明
@@ -524,7 +502,7 @@ override 和 final 是c++11 增加的两个**语境关键字**，即仅在特定
    因为必须考虑到某些容器或类似容器的数据结构没有成员函数版本的begin和end（cbegin, cend, rbegin, rend 等），而是以非成员函数版本提供begin和end，如内建数组。
 
 ```cpp
-// 如果是c++11，需要额外定义cbegin版本，因为c++11只提供非成员函数版本的begin() 和 end()。C++14提供了所有。
+// 如果是c++11，需要额外定义cbegin版本，因为c++11只提供非成员函数版本的begin() 和 end()。C++14提供了所有，包括cbegin，cend等。
 template <class C>
 auto cbegin(const C& container) -> decltype(std::begin(container)) {
   return std::begin(container);  // 不使用成员函数版本，使得在C是一个内建数组或没有成员函数版本的cbegin()时也适用。
@@ -573,7 +551,7 @@ void findAndInsert(C& container, const V& targetVal, const V& insertVal) {
 
       即高阶数据结构的swap行为要具备noexcept性质，一般的，仅当构建他的低阶数据结构具备noexcept性质时才成立。
 
-   3. c++11中，内存释放函数和所有的析构函数默认带有noexcept性质，因此不再需要显示声明。如果某个类的数据成员，其型别显示声明为noexcept(false), 则该类的析构函数不具备noexcept，如果成员对象的析构抛出了异常，这种行为未定义。
+   3. c++11中，内存释放函数和所有的析构函数默认带有noexcept性质，因此不再需要显示声明。如果某个类的数据成员，其型别的析构函数显示声明为noexcept(false), 则该类的析构函数不具备noexcept，如果成员对象的析构抛出了异常，这种行为未定义。
 
 4. 大多数函数都是异常中立的，不具备 noexcept 性质。
 
@@ -635,7 +613,7 @@ constexpr既可以修饰对象，也可以修饰函数。
    class Point {
     public:
      // constexpr 构造函数和成员函数的使用与普通 constexpr 函数无异。如果传入编译期已知值,
-     // 那么对象的所有数据成员都是编译期已知。这样初始化出来的对象具备 constexpr 属性，即编译期可知。
+     // 且这使得对象的所有数据成员都是编译期已知，那么这样初始化出来的对象具备 constexpr 属性，即编译期可知。
      constexpr Point(double xVal = 0, double yVal = 0) noexcept : x(xVal), y(yVal) {}
      constexpr double xValue() const noexcept { return x; }
      constexpr double yValue() const noexcept { return y; }
@@ -791,7 +769,7 @@ class Widget {
    class Widget{
    public:
    	template<typename T>
-   	Widget(const T& rhs);// 即使T为Widget，使得模板具现了复制构造函数的签名，也不会阻止编译器生成特种成员函数。
+   	Widget(const T& rhs);// 即使T为Widget，使得模板具现了复制构造函数的签名版本的函数，也不会阻止编译器生成特种成员函数。
    	
    	template<typename T>
    	Widget& operator=(const T& rhs);

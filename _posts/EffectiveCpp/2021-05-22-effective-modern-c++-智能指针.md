@@ -40,7 +40,7 @@ tags: c++11, shared_ptr, unique_ptr
       2. 违反了noexcept异常规格, 见条款14
       3. std::abort, std::Exit, std::exit, std::quick_exit 等调用
 
-2. 默认的，析构资源使用delete，但可以指定自定义删除器。有状态的删除器和采用函数指针实现的删除器会增加unique_ptr 型别的对象尺寸（无状态的函数对象和无捕获的lambda表达式不会增加尺寸，即与裸指针一样  ）
+2. 默认的，析构资源使用delete，但可以指定自定义删除器。有状态的函数对象和采用函数指针实现的删除器会增加unique_ptr 型别的对象尺寸（无状态的函数对象和无捕获的lambda表达式不会增加尺寸，即与裸指针一样  ）
 
    ```cpp
    // 注意删除器的参数类型
@@ -160,9 +160,178 @@ tags: c++11, shared_ptr, unique_ptr
    }
    ```
 
-   2. 在观察者模式中，每个主题包含一个容器持有其观察者的weak_ptr ，因为主题不控制观察者的生存期
+   2. 在观察者模式中，每个主题包含一个容器持有其观察者的weak_ptr ，因为主题不控制观察者的生存期，在使用时检查是否空悬。
 
-## 条款21
+## 条款21 优先使用 std::make_unique 和 std::make_shared, 而非直接使用 new
 
-## 条款22
+1. 相比于直接使用new，make系列函数消除了重复代码、改进了异常安全性、并且对于make_shared和allocated_shared而言，生成的目标代码会尺寸更小、速度更快
+
+   ```cpp
+   // 1. 消除重复(下面使用new的方式，Widet型别重复输入)
+   auto spw1(std::make_shared<Widget>());
+   std::shared_ptr<Widget> spw2(new Widget);
+   
+   // 2. make版本改进了异常安全性，原因在于new版本 processWidget 调用时，参数的准备可能是下面的顺序执行：
+   // (1) new Widget
+   // (2) computePriority() 
+   // (3) shared_ptr 构造函数
+   // computePriority 可能异常从而导致new Widget 资源泄漏，因为此时其还没有放到shared_ptr里面管理
+   int computePriority();
+   void processWidget(std::shared_ptr<Widget> spw, int priority);
+   
+   // new 版本
+   processWidget(std::shared_ptr<Widget>(new Widget), computePriority());// 存在潜在的资源泄漏
+   // make 版本
+   processWidget(std::make_shared<Widget>(), compuptePriority());//不会发生资源泄漏
+   
+   // 3. 性能的提升：make_shared会分配单块内存既保存Widget对象又保存与其关联的控制块，
+   // 相对于new而言，这种优化减少了一次内存分配，并且减小了程序的静态尺寸
+   ```
+
+2. 不适于使用make系列函数的场景包括需要定制删除器、以及直接传递大括号初始化物（参考条款7）
+
+   1. 在make系列函数里，对形参进行完美转发的代码使用的是圆括号而非大括号
+   2. 因此如果需要使用大括号初始化物，必须使用new；或者使用auto型别推导中转(条款30中的变通方案)：
+
+   ```cpp
+   auto initList = {10, 20};
+   auto spv = std::make_shared<std::vector<int>>(initList);
+   ```
+
+3. 对于shared_ptr，不建议使用make系列函数的额外场景包括：
+
+   1. 自定义内存管理的类
+
+      通常自定义内存管理类被设计成仅用来分配和释放该类精确尺寸的内存块。因为std::allocated_shared 所要求的内存数量并不等于动态分配对象的尺寸，而是还要加上控制块的尺寸。
+
+   2. 内存紧张的系统、非常大的对象、以及存在比指涉到相同对象的shared_ptr生存期更久的weak_ptr
+
+      如前所述，使用make系列函数分配的对象和控制块位于同一块内存。当对象的引用计数变为0时，对象被析构，但是托管对象的内存直到与其关联的控制块也被析构时才会释放，因为同一动态分配的内存块同时包含了两者。而控制块中除了引用计数，还有弱计数，用来管理weak_ptr。因此weak_ptr会指涉到控制块，只有当最后一个shared_ptr 和最后一个weak_ptr都被析构时，控制块才会被析构，进而对象的内存才会被释放。如果对象比较大，且最后一个shared_ptr被析构和最后一个weak_ptr被析构之间的时间隔不能忽略时，那么对象的析构和内存的释放之间就会产生延迟。此时应该使用new，但是得避免前文提到的异常安全问题，同时考虑到性能：
+
+      ```cpp
+      std::shared_ptr<Widget> spw(new Widget, cusDel);
+      processWidget(std::move(spw), computePriority()); //使用std::move，用移动避免复制以优化性能，避免了引用计数的操作
+      ```
+
+## 条款22 使用 Pimpl 习惯用法时，将特殊成员函数的定义放到实现文件中
+
+1. Pimpl惯用法(`pointer to implementation`)通过降低类的客户和类实现者之间的依赖性，减少了构建遍数
+
+   1. 声明一个指针型别的数据成员，指涉到一个非完整型别
+   2. 动态分配和回收持有从前在原始类里的那些数据成员的对象，而分配和回收代码则放在实现中
+
+2. 对于采用std::unique_ptr来实现的pImpl指针，须在类的头文件中声明特种成员函数，但在实现文件中实现他们。即使默认函数的实现有着正确的行为，也必须这样做。
+
+   以下面示例来说明，如果我们没有声明widget的析构函数，编译器将为我们合成一个，并在内部调用unique_ptr的析构函数，unique_ptr默认使用delete来析构其管理的对象，然而在delete之前，典型的实现会使用c++11中的static_assert来确保裸指针未指涉到非完整型别。因此这里的`struct Impl`非完整型别将导致static_assert失败，这个错误信息和`Widget w;`的析构位置有关，因为特种成员函数基本上都是隐式inline的。如在MacOS clang12.0下报错如下：
+
+   `error: invalid application of 'sizeof' to an incomplete type 'Widget::Impl' static_assert(sizeof(_Tp) > 0`
+
+   解决办法是，保证析构函数在生成析构代码时，Widget::Impl是个完整型别。这就是为什么要在实现文件中实现的原因。
+
+3. 上述建议不 适用于shared_ptr。因为对自定义析构器的支持的实现方式不同，shared_ptr对其指涉到的型别并不要求是完整型别。
+
+下面用代码示例来解释：
+
+```cpp
+// gadget.h
+class Gadget {};
+```
+
+```cpp
+// widget.h
+#include <memory>
+using std::unique_ptr;
+using std::shared_ptr;
+
+class Widget {
+ public:
+  Widget();
+  ~Widget();
+
+  Widget(Widget&& rhs);
+  Widget& operator=(Widget&& rhs);
+
+  Widget(const Widget& rhs);
+  Widget& operator=(const Widget& rhs);
+
+ private:
+  struct Impl;
+  unique_ptr<Impl> pImpl;
+};
+```
+
+```cpp
+// widget.cc
+#include "widget.h"
+
+#include <string>
+#include <vector>
+
+#include "gadget.h"
+
+struct Widget::Impl {
+  std::string name;
+  std::vector<double> data;
+  Gadget g1, g2, g3;
+};
+
+Widget::Widget() : pImpl(std::make_unique<Impl>()) {}
+Widget::~Widget() = default;
+
+Widget::Widget(Widget&& rhs) = default;
+Widget& Widget::operator=(Widget&& rhs) = default;
+
+Widget::Widget(const Widget& rhs) : pImpl(std::make_unique<Impl>(*rhs.pImpl)) {}
+Wdiget& Widget::operator=(const Widget& rhs) {
+  *pImpl = *rhs.pImpl;
+  return *this;
+}
+```
+
+```cpp
+// test.cc 只依赖 widget.h, 而不依赖 widget.cc 中依赖的头文件
+#include <gtest/gtest.h>
+
+#include "widget.h"
+
+TEST(SharedPtrTest, enableSharedFromThis) { 
+  Widget w; 
+}
+```
+
+BUILD:
+
+```bazel
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "gadget",
+    hdrs = ["gadget.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "widget",
+    hdrs = [
+        "widget.h",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gadget",
+    ],
+)
+
+cc_test(
+    name = "test",
+    srcs = [
+        "test.cc",
+    ],
+    deps = [
+        ":widget",
+        "@gtest",
+        "@gtest//:gtest_main",
+        "@local_boost//:libboost",
+    ],
+)
+```
 
