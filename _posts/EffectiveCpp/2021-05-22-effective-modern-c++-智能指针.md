@@ -73,6 +73,15 @@ tags: c++11, shared_ptr, unique_ptr
    std::shared_ptr<Investment> sp = makeInvestment(argument);
    ```
 
+4. c++11中自己实现make_unique
+
+   ```cpp
+   template <typename T, typename... Ts>
+   std::unique_ptr<T> make_unique(Ts... params) {
+     return std::unique_ptr<T>(new T(std::forward<Ts>(params)...));
+   }
+   ```
+
 ## 条款19 使用std::shared_ptr管理具备共享所有权的资源
 
 1. std::shared_ptr 提供方便的手段，实现了任意资源在共享所有权语义下进行生命周期管理的垃圾回收
