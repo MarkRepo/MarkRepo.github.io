@@ -7,7 +7,7 @@ tags: design
 
 ## 1. View C++ as a federation of languages.
 
-Today’s C++ is a *multiparadigm programming language*, one support ing a combination of procedural, object-oriented, functional, generic, and metaprogramming features. This power and flexibility make C++ a tool without equal（使C ++成为无与伦比的工具）, but can also cause some confusion. All the “proper usage” rules seem to have exceptions. How are we to make sense of such a language? The easiest way is to view C++ not as a single language but as a federation of related languages. Within a particular sublanguage, the rules tend to be simple, straightforward, and easy to remember.
+Today’s C++ is a *multiparadigm programming language*, one supporting a combination of procedural, object-oriented, functional, generic, and metaprogramming features. This power and flexibility make C++ a tool without equal（使C ++成为无与伦比的工具）, but can also cause some confusion. All the “proper usage” rules seem to have exceptions. How are we to make sense of such a language? The easiest way is to view C++ not as a single language but as a federation of related languages. Within a particular sublanguage, the rules tend to be simple, straightforward, and easy to remember.
 
 1. **C**
 2. **Object-Oriented C++**
