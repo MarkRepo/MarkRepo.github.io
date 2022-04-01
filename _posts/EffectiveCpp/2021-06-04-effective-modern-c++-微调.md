@@ -101,7 +101,7 @@ w.addNames(name+"niubi"); // 右值
    public:
      void addName(std::string newName) {
        if ((newName.length() >= minLen)) {
-         names.push_backk(std::move(newName));
+         names.push_back(std::move(newName));
        }
      }
    };
@@ -131,7 +131,7 @@ w.addNames(name+"niubi"); // 右值
 
       ```cpp
       std::regex r1 = nullptr; // 错误，不能通过编译（复制初始化）
-      stdd::regex r1(nullptr); // 能编译（直接初始化）
+      std::regex r1(nullptr); // 能编译（直接初始化）
       ```
 
       复制初始化不允许调用带有explicit声明饰词的构造函数，但直接初始化就允许。

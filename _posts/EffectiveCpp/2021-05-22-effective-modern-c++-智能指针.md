@@ -46,7 +46,7 @@ tags: c++11, shared_ptr, unique_ptr
    // 注意删除器的参数类型
    auto delInvmt = [](Investment* pInvest) {
      makeLogEntry(pInvest);
-     delte pInvest;
+     delete pInvest;
    }
    
    template <typename... Ts>

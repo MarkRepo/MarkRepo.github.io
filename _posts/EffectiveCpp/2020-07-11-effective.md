@@ -39,7 +39,7 @@ When replacing #defines with constants, two special cases are worth mentioning
    const char * const authorName = "Scott Meyers";
    ```
 
-   For a complete discussion of the meanings and uses of const, espe- cially in conjunction with pointers, see Item 3
+   For a complete discussion of the meanings and uses of const, espe-cially in conjunction with pointers, see Item 3
 
    However, it’s worth reminding you here that string objects are generally preferable to their char*-based progenitors, so authorName is often better defined this way:
 
@@ -103,7 +103,7 @@ When replacing #defines with constants, two special cases are worth mentioning
 
       另外，尽管好的编译器不会为整数类型的const对象预留存储空间（除非您创建指针或对该对象的引用），但草率的编译器可能会，并且您可能不愿意为此类对象预留内存。 像#defines一样，枚举绝不会导致这种不必要的内存分配。
 
-   2. A second reason to know about the enum hack is purely pragmatic(务实). Lots of code employs it, so you need to recognize it when you see it. In fact, the enum hack is a fundamental technique of template metapro- gramming (see Item 48).
+   2. A second reason to know about the enum hack is purely pragmatic(务实). Lots of code employs it, so you need to recognize it when you see it. In fact, the enum hack is a fundamental technique of template metapro-gramming (see Item 48).
 
 Getting back to the preprocessor, another common (mis)use of the #define directive is using it to implement macros that look like func- tions but that don’t incur the overhead of a function call. Here’s a macro that calls some function f with the greater of the macro’s argu- ments:
 
@@ -115,7 +115,7 @@ Getting back to the preprocessor, another common (mis)use of the #define directi
 Whenever you write this kind of macro, you have to remember to parenthesize all the arguments in the macro body. Otherwise you can run into trouble when somebody calls the macro with an expression. But even if you get that right, look at the weird things that can happen:
 
 ```cpp
-inta=5,b=0;
+int a=5,b=0;
 CALL_WITH_MAX(++a, b); // a is incremented twice
 CALL_WITH_MAX(++a, b+10); // a is incremented once
 ```

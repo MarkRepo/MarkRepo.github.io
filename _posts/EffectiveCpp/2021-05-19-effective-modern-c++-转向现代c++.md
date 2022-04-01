@@ -13,8 +13,7 @@ tags: c++11
 
  **大括号初始化可以应用的语境最为宽泛，可以阻止隐式窄化型别转换，还对最令人苦恼之解析语法免疫**
 
-缺陷:   
-**源于大括号初始化物、std::initializer_list以及构造函数重载决议之间的纠结关系**, 如下示例所示：
+缺陷:   **源于大括号初始化物、std::initializer_list以及构造函数重载决议之间的纠结关系**, 如下示例所示：
 
 ```cpp
 #include <gtest/gtest.h>
@@ -164,7 +163,7 @@ nullptr的型别是std::nullptr_t，而非整型，它可以隐式转化到所�
 
 nullptr可以提升代码的清晰性，明确表明是指针类型。优先使用nullptr的两点理由：
 
-1. 0和NULL都不具备指针类型(0为int，NULL是某个整型，依赖于实现)。这导致其在指针和整型之前重载会有决议问题：
+1. 0和NULL都不具备指针类型(0为int，NULL是某个整型，依赖于实现)。这导致其在指针和整型之间重载会有决议问题：
 
 ```cpp
 #include <gtest/gtest.h>
@@ -223,7 +222,7 @@ TEST(TypeIndex, nullptr) {
 ## 条款9 优先使用别名声明，而非 typedef
 
 1. 别名声明可以模板化，称为别名模板，typedef不支持
-2. 别名模板可以让人免写 “::type” 后缀。并且在模板内部，对于内嵌的typede的引用经常要加上typename前缀
+2. 别名模板可以让人免写 “::type” 后缀。并且在模板内部，对于内嵌的typedef的引用经常要加上typename前缀
 
 参考如下示例代码来看别名声明和typedef的使用差异
 
@@ -742,7 +741,7 @@ class Widget {
    public:
    	~Widget();
    	Widget(const Widget&) = default;
-   	Widget& operator(const Widget&) = default;
+   	Widget& operator=(const Widget&) = default;
    };
    ```
 
